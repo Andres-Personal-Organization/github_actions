@@ -1,0 +1,32 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+      - IMAGE_NAME="${NAME}:${CODEBUILD_BUILD_NUMBER}"
+      - IMAGE_URI="${REGISTRY}/${IMAGE_NAME}"
+      - aws ecr get-login-password --region "${AWS_DEFAULT_REGION}" | docker login --username AWS --password-stdin "${REGISTRY}"
+
+  build:
+    commands:
+      - yarn install
+      - yarn build
+      - docker build --tag "${IMAGE_NAME}" --build-arg CODEARTIFACT_AUTH_TOKEN=${CODEARTIFACT_AUTH_TOKEN} .
+      - docker tag "${IMAGE_NAME}" "${IMAGE_URI}"
+
+  post_build:
+    commands:
+      - docker push "${IMAGE_URI}"
+      - printf '{"ImageURI":"%s"}' "${IMAGE_URI}" > imageDetail.json
+      - (cd cicd && ./create_taskdefs.sh)
+      - aws s3 sync "config" "s3://tesspay-codepipeline/${NAME}/config/${CODEBUILD_BUILD_NUMBER}" --exclude "*" --include "*.env" --sse aws:kms --sse-kms-key-id "${KMS_KEY_ID}"
+
+artifacts:
+  files:
+    - "cicd/*"
+    - "imageDetail.json"
+
+cache:
+  paths:
+    - "./node_modules/**/*"

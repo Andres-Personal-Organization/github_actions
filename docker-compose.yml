@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  main:
+    container_name: tpadmin-service
+    build:
+      context: .
+    ports:
+      - 3140:3000
+      - 3141:3001
+    env_file:
+      - .env
